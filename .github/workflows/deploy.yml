@@ -1,25 +1,38 @@
 name: Deploy to Azure App Service
 
 on:
-  push: 
-    branches: 
-      - app-service-deployment
+  push:
+    branches:
+      - master  # Trigger on push to master branch
 
-jobs: 
+jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+
     steps:
+      # Step 1: Checkout the source code
       - name: Checkout Source
         uses: actions/checkout@v3
+
+      # Step 2: Setup Node.js version
       - name: Setup Node.js version
         uses: actions/setup-node@v4
-        with: 
+        with:
           node-version: '18.x'
+
+      # Step 3: Install dependencies
       - name: Install Dependencies
         run: npm install
+
+      # Step 4: Deploy to Azure App Service
       - name: Deploy to Azure App Service
         uses: azure/webapps-deploy@v2
         with:
-          app-name: integrationninjas
-          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
-          package: .
+          app-name: integrationninjas  # Azure App Service name
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}  # Publish profile from secrets
+          package: .  # The directory to deploy
+
+        env:
+          MONGO_URI: ${{ secrets.MONGO_URI }}  # Inject MongoDB URI from GitHub secrets
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}  # Inject JWT secret from GitHub secrets
+          PORT: 5000  # Optional: You can pass the port value if you need it
