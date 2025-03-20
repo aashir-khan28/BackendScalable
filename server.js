@@ -26,6 +26,9 @@ app.use(express.urlencoded({ extended: true }));  // For parsing application/x-w
 connectDB();
 
 // Routes
+app.get('/', (req, res) => {
+  res.send('Photo Sharing App is running successfully!');
+});
 app.use("/api/auth", authRoutes);
 app.use("/api/photos", photoRoutes);
 
