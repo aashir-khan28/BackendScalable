@@ -3,7 +3,7 @@ name: Deploy to Azure App Service
 on:
   push:
     branches:
-      - master  # Trigger on push to master branch
+      - master  # Trigger the workflow on push to the master branch
 
 jobs:
   build-and-deploy:
@@ -18,7 +18,7 @@ jobs:
       - name: Setup Node.js version
         uses: actions/setup-node@v4
         with:
-          node-version: '18.x'
+          node-version: '20x.x'
 
       # Step 3: Install dependencies
       - name: Install Dependencies
@@ -28,11 +28,18 @@ jobs:
       - name: Deploy to Azure App Service
         uses: azure/webapps-deploy@v2
         with:
-          app-name: integrationninjas  # Azure App Service name
+          app-name: photosharingapp  # Azure App Service name
           publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}  # Publish profile from secrets
           package: .  # The directory to deploy
 
         env:
           MONGO_URI: ${{ secrets.MONGO_URI }}  # Inject MongoDB URI from GitHub secrets
           JWT_SECRET: ${{ secrets.JWT_SECRET }}  # Inject JWT secret from GitHub secrets
-          PORT: 5000  # Optional: You can pass the port value if you need it
+          PORT: ${{ secrets.PORT }}  # Inject Port from GitHub secrets (or set a default value)
+          
+          # Azure Blob Storage credentials
+          AZURE_STORAGE_ACCOUNT_NAME: ${{ secrets.AZURE_STORAGE_ACCOUNT_NAME }}  # Azure Storage account name
+          AZURE_STORAGE_ACCOUNT_KEY: ${{ secrets.AZURE_STORAGE_ACCOUNT_KEY }}  # Azure Storage account key
+          AZURE_CONTAINER_NAME: ${{ secrets.AZURE_CONTAINER_NAME }}  # Azure container name
+          AZURE_STORAGE_CONNECTION_STRING: ${{ secrets.AZURE_STORAGE_CONNECTION_STRING }}  # Azure connection string
+          AZURE_BLOB_SAS_TOKEN: ${{ secrets.AZURE_BLOB_SAS_TOKEN }}  # Azure SAS token
