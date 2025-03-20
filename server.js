@@ -10,7 +10,7 @@ const authRoutes = require("./src/routes/authRoutes");
 const photoRoutes = require("./src/routes/photoRoutes");
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 8080;
 
 // Middleware
 // app.use(cors());  // Ensure cross-origin requests are allowed
