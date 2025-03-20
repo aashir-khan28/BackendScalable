@@ -7,8 +7,14 @@ require("dotenv").config();
 /** 
  * Initialize Azure Blob Storage client and container 
  */
-const blobServiceClient = BlobServiceClient.fromConnectionString(process.env.AZURE_STORAGE_CONNECTION_STRING);
-const containerClient = blobServiceClient.getContainerClient(process.env.AZURE_CONTAINER_NAME);
+const connectionString = process.env.AZURE_STORAGE_CONNECTION_STRING;
+const containerName = process.env.AZURE_CONTAINER_NAME;
+if (!connectionString || !containerName) {
+  throw new Error("Azure Storage connection string or container name is not set in environment variables.");
+}
+
+const blobServiceClient = BlobServiceClient.fromConnectionString(connectionString);
+const containerClient = blobServiceClient.getContainerClient(containerName);
 
 /** 
  * Create a temporary directory for local file uploads 
@@ -48,16 +54,23 @@ async function uploadToBlob(filePath, fileName, fileType) {
       blobHTTPHeaders: { blobContentType: getContentType(fileName) }
     };
 
+    // Upload the file
     await blockBlobClient.uploadFile(filePath, uploadOptions);
 
     // Generate the public URL with the SAS token
     const sasToken = process.env.AZURE_BLOB_SAS_TOKEN;
+    if (!sasToken) {
+      throw new Error("SAS Token is not defined.");
+    }
     const fileUrl = `${blockBlobClient.url}?${sasToken}`;
+
+    // Clean up the temporary file after upload
+    fs.unlinkSync(filePath);
 
     return fileUrl;
   } catch (error) {
     console.error("Error uploading to Azure Blob:", error);
-    throw new Error("Failed to upload file to Azure Blob Storage");
+    throw new Error(`Failed to upload file to Azure Blob Storage: ${error.message}`);
   }
 }
 
