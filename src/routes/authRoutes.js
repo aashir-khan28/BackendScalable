@@ -12,4 +12,5 @@ router.get("/profile", authMiddleware, getUserDetails);
 
 
 
+
 module.exports = router;
