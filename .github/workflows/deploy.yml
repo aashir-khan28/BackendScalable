@@ -36,7 +36,7 @@ jobs:
       - name: Azure App Service Settings
         uses: azure/appservice-settings@v1
         with:
-          app-name: photosharingapp
+          app-name: ScalableNodejs  # Azure App Service name
           app-settings-json: |
             [
               {
