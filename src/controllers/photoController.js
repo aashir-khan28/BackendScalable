@@ -1,54 +1,144 @@
-const fs = require("fs");
 const { uploadToBlob } = require("../config/azureBlob");
-const Photo = require("../models/PhotoModel.js");
+const Photo = require("../models/PhotoModel");
+const fs = require("fs");
+const path = require("path");
+
+// Ensure local storage directory exists
+const LOCAL_UPLOAD_DIR = path.join(__dirname, '../uploads/photos');
+if (!fs.existsSync(LOCAL_UPLOAD_DIR)) {
+  fs.mkdirSync(LOCAL_UPLOAD_DIR, { recursive: true });
+}
 
 exports.uploadPhoto = async (req, res) => {
+  const filePath = req.file.path;
+  const fileName = req.file.filename;
+  const localFilePath = path.join(LOCAL_UPLOAD_DIR, fileName);
+
   try {
-    // Get file details
-    const filePath = req.file.path;
-    const fileName = req.file.filename;
+    let imageUrl;
+    let storageMethod = 'azure';
 
-    // Upload the file to Azure Blob Storage
-    const blobUrl = await uploadToBlob(filePath, fileName, "photo");
+    try {
+      // Attempt to upload to Azure Blob Storage
+      imageUrl = await uploadToBlob(filePath, fileName, "photo");
+    } catch (azureError) {
+      console.error("Azure upload failed:", azureError);
+      
+      // Fallback to local storage
+      try {
+        // Copy file to local upload directory
+        fs.copyFileSync(filePath, localFilePath);
+        imageUrl = `/uploads/photos/${fileName}`;
+        storageMethod = 'local';
+        console.log("File saved locally as backup");
+      } catch (localSaveError) {
+        console.error("Local file save failed:", localSaveError);
+        throw new Error("Both Azure and local storage upload failed");
+      }
+    }
 
-    // Create new photo document
+    // Create a new photo document and save it to the database
     const newPhoto = new Photo({
-      creator: req.user.id,  // Assuming `req.user.id` comes from the auth middleware
-      imageUrl: blobUrl,
+      creator: req.user.id,
+      imageUrl: imageUrl,
       title: req.body.title || "",
       caption: req.body.caption || "",
       location: req.body.location || "",
       tags: req.body.tags ? req.body.tags.split(",") : [],
+      storageMethod: storageMethod // New field to track storage method
     });
 
-    // Save photo to database
     await newPhoto.save();
 
-    // Clean up temporary file
-    fs.unlinkSync(filePath);
+    // Clean up the temporary file
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
 
-    // Respond with success message
     res.status(201).json({
-      message: "Photo uploaded successfully",
+      message: `Photo uploaded successfully via ${storageMethod} storage`,
       photo: newPhoto,
+      storageMethod: storageMethod
     });
 
   } catch (error) {
     console.error("Upload error:", error);
 
-    // Clean up temporary file if it exists and there was an error
-    if (req.file && req.file.path) {
-      try {
-        fs.unlinkSync(req.file.path);
-      } catch (unlinkError) {
-        console.error("Error deleting temp file:", unlinkError);
-      }
+    // Clean up temporary and potentially copied files
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+    if (fs.existsSync(localFilePath)) {
+      fs.unlinkSync(localFilePath);
     }
 
-    // Respond with error message
     res.status(500).json({
       error: "Photo upload failed",
       details: error.message,
+    });
+  }
+};
+
+
+// get all photos with pagination and filtering and search
+
+exports.getPhotos = async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const search = req.query.search || '';
+    const sortBy = req.query.sortBy || 'latest';
+
+    // Build search query
+    const searchQuery = search 
+      ? { 
+          $or: [
+            { title: { $regex: search, $options: 'i' } },
+            { caption: { $regex: search, $options: 'i' } }
+          ] 
+        } 
+      : {};
+
+    // Determine sort order
+    const sortOptions = sortBy === 'latest' 
+      ? { createdAt: -1 } 
+      : { createdAt: 1 };
+
+    // Calculate skip value for pagination
+    const skip = (page - 1) * limit;
+
+    // Fetch total count of documents
+    const totalPhotos = await Photo.countDocuments(searchQuery);
+
+    // Fetch paginated photos
+    const photos = await Photo.find(searchQuery)
+      .sort(sortOptions)
+      .skip(skip)
+      .limit(limit)
+      .populate('creator', 'email') // Optional: populate creator details
+      .lean(); // Convert to plain JavaScript object for flexibility
+
+    // Calculate pagination metadata
+    const totalPages = Math.ceil(totalPhotos / limit);
+    const hasNextPage = page < totalPages;
+    const hasPrevPage = page > 1;
+
+    res.status(200).json({
+      photos,
+      pagination: {
+        currentPage: page,
+        totalPages,
+        totalPhotos,
+        hasNextPage,
+        hasPrevPage,
+        limit
+      }
+    });
+  } catch (error) {
+    console.error("Get photos error:", error);
+    res.status(500).json({ 
+      error: "Failed to fetch photos", 
+      details: error.message 
     });
   }
 };
