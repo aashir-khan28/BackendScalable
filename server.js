@@ -23,7 +23,7 @@ app.use(morgan("dev"));
 app.use(cors({
   origin: [
     process.env.CLIENT_ORIGIN || "http://localhost:3000",
-    "https://photosharenext-cddrd4h2bvf7dhg9.ukwest-01.azurewebsites.net"
+    "https://frontendscalable-ekazg9bgauhqa8bm.canadacentral-01.azurewebsites.net"
   ],
   methods: ["GET", "POST", "PUT", "DELETE"],
   credentials: true,
