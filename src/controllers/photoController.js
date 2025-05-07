@@ -89,42 +89,58 @@ exports.getPhotos = async (req, res) => {
     const search = req.query.search || '';
     const sortBy = req.query.sortBy || 'latest';
 
-    // Build search query
-    const searchQuery = search 
-      ? { 
+    const searchQuery = search
+      ? {
           $or: [
             { title: { $regex: search, $options: 'i' } },
             { caption: { $regex: search, $options: 'i' } }
-          ] 
-        } 
+          ]
+        }
       : {};
 
-    // Determine sort order
-    const sortOptions = sortBy === 'latest' 
-      ? { createdAt: -1 } 
-      : { createdAt: 1 };
-
-    // Calculate skip value for pagination
+    const sortOptions = sortBy === 'latest' ? { createdAt: -1 } : { createdAt: 1 };
     const skip = (page - 1) * limit;
 
-    // Fetch total count of documents
     const totalPhotos = await Photo.countDocuments(searchQuery);
 
-    // Fetch paginated photos
     const photos = await Photo.find(searchQuery)
       .sort(sortOptions)
       .skip(skip)
       .limit(limit)
-      .populate('creator', 'email') // Optional: populate creator details
-      .lean(); // Convert to plain JavaScript object for flexibility
+      .populate("creator", "email")
+      .populate("comments.user", "email"); // ✅ Ensure comment authors are populated
 
-    // Calculate pagination metadata
     const totalPages = Math.ceil(totalPhotos / limit);
     const hasNextPage = page < totalPages;
     const hasPrevPage = page > 1;
 
+    const responsePhotos = photos.map((photo) => ({
+      _id: photo._id,
+      creator: {
+        _id: photo.creator?._id,
+        email: photo.creator?.email || "unknown",
+      },
+      imageUrl: photo.imageUrl,
+      title: photo.title,
+      caption: photo.caption,
+      location: photo.location,
+      tags: photo.tags,
+      likes: photo.likes.map((id) => id.toString()),
+      comments: photo.comments.map((c) => ({
+        _id: c._id,
+        text: c.text,
+        createdAt: c.createdAt,
+        user: {
+          _id: c.user?._id || c.user,
+          email: c.user?.email || "unknown",
+        },
+      })),
+      createdAt: photo.createdAt,
+      __v: photo.__v,
+    }));
+
     res.status(200).json({
-      photos,
+      photos: responsePhotos,
       pagination: {
         currentPage: page,
         totalPages,
@@ -136,40 +152,54 @@ exports.getPhotos = async (req, res) => {
     });
   } catch (error) {
     console.error("Get photos error:", error);
-    res.status(500).json({ 
-      error: "Failed to fetch photos", 
-      details: error.message 
+    res.status(500).json({
+      error: "Failed to fetch photos",
+      details: error.message,
     });
   }
 };
-
 exports.likePhoto = async (req, res) => {
   try {
-    const photo = await Photo.findById(req.params.id);
+    const photoId = req.params.id;
+    const userId = req.user.id.toString();
+
+    // Find the photo by ID
+    const photo = await Photo.findById(photoId);
     if (!photo) {
       return res.status(404).json({ message: "Photo not found" });
     }
 
-    // Check if the user has already liked the photo
-    if (photo.likes.includes(req.user.id)) {
+    // Convert ObjectId array to string array for comparison
+    const likes = photo.likes.map(id => id.toString());
+
+    if (likes.includes(userId)) {
       // Unlike the photo
-      photo.likes = photo.likes.filter((userId) => userId.toString() !== req.user.id);
+      photo.likes = photo.likes.filter(id => id.toString() !== userId);
     } else {
       // Like the photo
-      photo.likes.push(req.user.id);
+      photo.likes.push(userId);
     }
 
+    // Save the updated photo
     await photo.save();
-    res.status(200).json({ message: "Like updated", likes: photo.likes });
+
+    res.status(200).json({
+      message: "Like status updated successfully",
+      totalLikes: photo.likes.length,
+      likedBy: photo.likes,
+    });
   } catch (error) {
     console.error("Like error:", error);
-    res.status(500).json({ error: "Failed to update like", details: error.message });
+    res.status(500).json({
+      error: "Failed to update like status",
+      details: error.message,
+    });
   }
 };
-
 exports.commentPhoto = async (req, res) => {
   try {
     const photo = await Photo.findById(req.params.id);
+
     if (!photo) {
       return res.status(404).json({ message: "Photo not found" });
     }
@@ -182,9 +212,25 @@ exports.commentPhoto = async (req, res) => {
     photo.comments.push(newComment);
     await photo.save();
 
-    res.status(201).json({ message: "Comment added", comments: photo.comments });
+    // Re-fetch with populated user emails
+    await photo.populate("comments.user", "email");
+
+    res.status(201).json({
+      message: "Comment added",
+      comments: photo.comments.map((c) => ({
+        text: c.text,
+        user: {
+          id: c.user?._id,
+          email: c.user?.email || "unknown",
+        },
+        createdAt: c.createdAt,
+      })),
+    });
   } catch (error) {
     console.error("Comment error:", error);
-    res.status(500).json({ error: "Failed to add comment", details: error.message });
+    res.status(500).json({
+      error: "Failed to add comment",
+      details: error.message,
+    });
   }
 };
