@@ -21,7 +21,10 @@ app.use(morgan("dev"));
 
 // Middleware
 app.use(cors({
-  origin: process.env.CLIENT_ORIGIN || "https://photosharenext-cddrd4h2bvf7dhg9.ukwest-01.azurewebsites.net",
+  origin: [
+    process.env.CLIENT_ORIGIN || "http://localhost:3000",
+    "https://photosharenext-cddrd4h2bvf7dhg9.ukwest-01.azurewebsites.net"
+  ],
   methods: ["GET", "POST", "PUT", "DELETE"],
   credentials: true,
   preflightContinue: false
