@@ -37,6 +37,42 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage });
 
+/**
+ * Generate a fresh SAS token with a reasonable expiration time
+ * @returns {Promise<string>} - The generated SAS token
+ */
+async function generateSasToken() {
+  try {
+    // Calculate expiration time (30 days from now)
+    const expiryTime = new Date();
+    expiryTime.setDate(expiryTime.getDate() + 30);
+    
+    // Define the SAS token permissions and properties
+    const sasOptions = {
+      containerName: containerName,
+      permissions: {
+        read: true,  // Read permission
+        add: false,
+        create: false, 
+        write: false,
+        delete: false,
+        list: false
+      },
+      expiresOn: expiryTime
+    };
+    
+    // Generate the SAS token
+    const sasToken = await containerClient.generateSasUrl(sasOptions);
+    
+    // Extract just the token part (remove the URL)
+    const tokenPart = sasToken.split('?')[1];
+    return tokenPart;
+  } catch (error) {
+    console.error("Error generating SAS token:", error);
+    throw error;
+  }
+}
+
 /** 
  * Upload a file (photo or video) to Azure Blob Storage 
  * @param {string} filePath - Path to the file on local storage
@@ -57,11 +93,8 @@ async function uploadToBlob(filePath, fileName, fileType) {
     // Upload the file
     await blockBlobClient.uploadFile(filePath, uploadOptions);
 
-    // Generate the public URL with the SAS token
-    const sasToken = process.env.AZURE_BLOB_SAS_TOKEN;
-    if (!sasToken) {
-      throw new Error("SAS Token is not defined.");
-    }
+    // Generate a fresh SAS token instead of using a static one
+    const sasToken = await generateSasToken();
     const fileUrl = `${blockBlobClient.url}?${sasToken}`;
 
     // Clean up the temporary file after upload
@@ -95,4 +128,4 @@ function getContentType(filename) {
   return mimeTypes[ext] || "application/octet-stream";
 }
 
-module.exports = { upload, uploadToBlob, containerClient };
+module.exports = { upload, uploadToBlob, containerClient, generateSasToken };
