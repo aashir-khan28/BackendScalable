@@ -38,7 +38,7 @@ connectDB();
 
 // Routes
 app.get('/', (req, res) => {
-  res.send('Photo Sharing App is running successfully!');
+  res.send('Share it running');
 });
 app.use("/api/auth", authRoutes);
 app.use("/api/upload", photoRoutes);
